@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LaurenSansGluten — Quel gâteau te correspond ?</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --terracotta: #C4622D;
+    --terracotta-light: #E8845A;
+    --terracotta-pale: #F5DDD0;
+    --forest: #3D6B4F;
+    --forest-light: #5A8C6A;
+    --forest-pale: #D5E8DC;
+    --cream: #FAF5EE;
+    --cream-dark: #F0E8DA;
+    --dark: #2A1F1A;
+    --mid: #6B5548;
+    --white: #FFFFFF;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--cream);
+    color: var(--dark);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* BACKGROUND ORGANIC SHAPES */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -100px; right: -100px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, var(--terracotta-pale) 0%, transparent 70%);
+    z-index: 0;
+    pointer-events: none;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -100px; left: -100px;
+    width: 350px; height: 350px;
+    background: radial-gradient(circle, var(--forest-pale) 0%, transparent 70%);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* SCREENS */
+  .screen {
+    display: none;
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+  }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ========== INTRO SCREEN ========== */
+  #screen-intro {
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+    text-align: center;
+  }
+
+  .intro-badge {
+    display: inline-block;
+    background: var(--forest);
+    color: var(--white);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 6px 16px;
+    border-radius: 20px;
+    margin-bottom: 24px;
+  }
+
+  .intro-logo {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(28px, 6vw, 42px);
+    font-weight: 700;
+    color: var(--terracotta);
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+
+  .intro-logo span {
+    font-style: italic;
+    color: var(--forest);
+  }
+
+  .intro-tagline {
+    font-size: 16px;
+    color: var(--mid);
+    font-weight: 300;
+    margin-bottom: 32px;
+    line-height: 1.5;
+  }
+
+  .intro-cake-emoji {
+    font-size: 72px;
+    margin-bottom: 24px;
+    display: block;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  .intro-question {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(22px, 5vw, 32px);
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 12px;
+    color: var(--dark);
+  }
+
+  .intro-sub {
+    font-size: 14px;
+    color: var(--mid);
+    margin-bottom: 40px;
+    max-width: 340px;
+    line-height: 1.6;
+  }
+
+  .btn-start {
+    background: var(--terracotta);
+    color: var(--white);
+    border: none;
+    padding: 16px 40px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    letter-spacing: 0.3px;
+    box-shadow: 0 4px 20px rgba(196,98,45,0.35);
+  }
+  .btn-start:hover {
+    background: var(--terracotta-light);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(196,98,45,0.45);
+  }
+
+  .intro-flour-pills {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 32px;
+  }
+
+  .flour-pill {
+    background: var(--cream-dark);
+    border: 1px solid rgba(196,98,45,0.2);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    color: var(--mid);
+  }
+
+  /* ========== QUIZ SCREEN ========== */
+  #screen-quiz {
+    padding: 0;
+    flex-direction: column;
+  }
+
+  .quiz-header {
+    background: var(--white);
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--cream-dark);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .quiz-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .quiz-logo-small {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    color: var(--terracotta);
+    font-weight: 700;
+  }
+
+  .quiz-step-label {
+    font-size: 12px;
+    color: var(--mid);
+    font-weight: 500;
+  }
+
+  .progress-bar-track {
+    height: 4px;
+    background: var(--cream-dark);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(to right, var(--terracotta), var(--terracotta-light));
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  .quiz-body {
+    padding: 32px 24px;
+    flex: 1;
+    max-width: 560px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .question-number {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--terracotta);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+
+  .question-number::before {
+    content: '';
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--terracotta);
+  }
+
+  .question-text {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(20px, 4.5vw, 26px);
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 8px;
+    color: var(--dark);
+  }
+
+  .question-emoji {
+    font-size: 32px;
+    margin-bottom: 20px;
+    display: block;
+  }
+
+  .fun-note {
+    font-size: 13px;
+    color: var(--mid);
+    margin-bottom: 28px;
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  .options-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .option-card {
+    background: var(--white);
+    border: 2px solid var(--cream-dark);
+    border-radius: 16px;
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    text-align: left;
+  }
+
+  .option-card:hover {
+    border-color: var(--terracotta-light);
+    background: var(--terracotta-pale);
+    transform: translateX(4px);
+  }
+
+  .option-card.selected {
+    border-color: var(--terracotta);
+    background: var(--terracotta-pale);
+  }
+
+  .option-card.selected .option-radio {
+    background: var(--terracotta);
+    border-color: var(--terracotta);
+  }
+
+  .option-card.selected .option-radio::after {
+    opacity: 1;
+  }
+
+  .option-radio {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--cream-dark);
+    background: var(--cream);
+    flex-shrink: 0;
+    margin-top: 1px;
+    position: relative;
+    transition: all 0.2s;
+  }
+
+  .option-radio::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--white);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .option-content { flex: 1; }
+
+  .option-main {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--dark);
+    line-height: 1.3;
+    margin-bottom: 2px;
+  }
+
+  .option-sub {
+    font-size: 12px;
+    color: var(--mid);
+    line-height: 1.4;
+  }
+
+  .option-emoji {
+    font-size: 22px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* FACT BOX */
+  .fact-box {
+    background: linear-gradient(135deg, var(--forest-pale), var(--cream-dark));
+    border-left: 3px solid var(--forest);
+    border-radius: 0 12px 12px 0;
+    padding: 14px 16px;
+    margin-bottom: 28px;
+    display: none;
+  }
+
+  .fact-box.visible { display: block; animation: slideIn 0.3s ease; }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fact-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--forest);
+    margin-bottom: 4px;
+  }
+
+  .fact-text {
+    font-size: 13px;
+    color: var(--dark);
+    line-height: 1.5;
+  }
+
+  .btn-next {
+    width: 100%;
+    background: var(--terracotta);
+    color: var(--white);
+    border: none;
+    padding: 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0.4;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(196,98,45,0.2);
+  }
+
+  .btn-next.enabled {
+    opacity: 1;
+    pointer-events: all;
+  }
+  .btn-next.enabled:hover {
+    background: var(--terracotta-light);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(196,98,45,0.35);
+  }
+
+  /* ========== LOADING SCREEN ========== */
+  #screen-loading {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px 24px;
+  }
+
+  .loading-cake {
+    font-size: 64px;
+    margin-bottom: 24px;
+    animation: bake 1.5s ease-in-out infinite;
+  }
+
+  @keyframes bake {
+    0%, 100% { transform: scale(1) rotate(-3deg); }
+    50% { transform: scale(1.1) rotate(3deg); }
+  }
+
+  .loading-text {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--dark);
+    margin-bottom: 8px;
+  }
+
+  .loading-sub {
+    font-size: 14px;
+    color: var(--mid);
+    margin-bottom: 32px;
+  }
+
+  .loading-dots {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--terracotta);
+    animation: bounce 1.2s ease-in-out infinite;
+  }
+  .dot:nth-child(2) { animation-delay: 0.2s; background: var(--forest); }
+  .dot:nth-child(3) { animation-delay: 0.4s; background: var(--terracotta-light); }
+
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+    40% { transform: scale(1.2); opacity: 1; }
+  }
+
+  /* ========== RESULT SCREEN ========== */
+  #screen-result {
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .result-hero {
+    padding: 40px 24px 32px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .result-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(160deg, var(--terracotta-pale) 0%, var(--cream) 100%);
+    z-index: -1;
+  }
+
+  .result-badge {
+    display: inline-block;
+    background: var(--forest);
+    color: var(--white);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+  }
+
+  .result-cake-emoji {
+    font-size: 80px;
+    display: block;
+    margin-bottom: 16px;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .result-intro {
+    font-size: 14px;
+    color: var(--mid);
+    margin-bottom: 8px;
+    font-weight: 300;
+  }
+
+  .result-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(26px, 6vw, 36px);
+    font-weight: 700;
+    color: var(--dark);
+    line-height: 1.2;
+    margin-bottom: 12px;
+  }
+
+  .result-subtitle {
+    font-size: 14px;
+    color: var(--mid);
+    line-height: 1.6;
+    max-width: 340px;
+    margin: 0 auto;
+  }
+
+  .result-body {
+    padding: 28px 24px 40px;
+    max-width: 560px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .result-section-title {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--terracotta);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .result-section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--cream-dark);
+  }
+
+  .nutri-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .nutri-card {
+    background: var(--white);
+    border-radius: 14px;
+    padding: 16px;
+    border: 1px solid var(--cream-dark);
+  }
+
+  .nutri-card .icon { font-size: 22px; margin-bottom: 8px; display: block; }
+  .nutri-card .label { font-size: 11px; color: var(--mid); margin-bottom: 2px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; }
+  .nutri-card .value { font-size: 14px; font-weight: 500; color: var(--dark); line-height: 1.3; }
+
+  .profile-box {
+    background: linear-gradient(135deg, var(--forest), var(--forest-light));
+    border-radius: 16px;
+    padding: 20px;
+    color: var(--white);
+    margin-bottom: 28px;
+  }
+
+  .profile-box-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .profile-box-text {
+    font-size: 13px;
+    line-height: 1.6;
+    opacity: 0.9;
+  }
+
+  .flour-story {
+    background: var(--cream-dark);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 28px;
+  }
+
+  .flour-story-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .flour-story-emoji { font-size: 28px; }
+
+  .flour-story-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--dark);
+  }
+
+  .flour-story-origin {
+    font-size: 11px;
+    color: var(--mid);
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .flour-story-text {
+    font-size: 13px;
+    color: var(--dark);
+    line-height: 1.7;
+  }
+
+  .flour-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .flour-badge {
+    background: var(--white);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--forest);
+    border: 1px solid var(--forest-pale);
+  }
+
+  .btn-retry {
+    width: 100%;
+    background: transparent;
+    color: var(--terracotta);
+    border: 2px solid var(--terracotta);
+    padding: 15px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 12px;
+  }
+
+  .btn-retry:hover {
+    background: var(--terracotta-pale);
+  }
+
+  .btn-share {
+    width: 100%;
+    background: var(--dark);
+    color: var(--white);
+    border: none;
+    padding: 15px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 24px;
+  }
+
+  .btn-share:hover {
+    background: var(--mid);
+  }
+
+  .brand-footer {
+    text-align: center;
+    padding: 16px;
+    font-size: 12px;
+    color: var(--mid);
+    border-top: 1px solid var(--cream-dark);
+  }
+
+  .brand-footer strong {
+    color: var(--terracotta);
+    font-family: 'Playfair Display', serif;
+  }
+
+  /* Transition animation */
+  .fade-in {
+    animation: fadeInUp 0.4s ease forwards;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 360px) {
+    .nutri-cards { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== INTRO ===== -->
+<div id="screen-intro" class="screen active">
+  <div class="intro-badge">✨ Quiz gourmand & éducatif</div>
+  <span class="intro-cake-emoji">🎂</span>
+  <div class="intro-logo">Lauren<span>SansGluten</span></div>
+  <p class="intro-tagline">Pâtisserie artisanale · Sans gluten · Sans lactose</p>
+  <h1 class="intro-question">Quel gâteau est fait pour toi ?</h1>
+  <p class="intro-sub">7 questions pour découvrir ta gamme idéale parmi nos farines africaines d'exception 🌍</p>
+  <button class="btn-start" onclick="startQuiz()">Commencer le quiz →</button>
+  <div class="intro-flour-pills">
+    <span class="flour-pill">🌾 Sorgho</span>
+    <span class="flour-pill">🌰 Souchet</span>
+    <span class="flour-pill">🍠 Patate douce</span>
+  </div>
+</div>
+
+<!-- ===== QUIZ ===== -->
+<div id="screen-quiz" class="screen">
+  <div class="quiz-header">
+    <div class="quiz-header-top">
+      <span class="quiz-logo-small">LaurenSansGluten</span>
+      <span class="quiz-step-label" id="step-label">Question 1/7</span>
+    </div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progress-fill" style="width: 14%"></div>
+    </div>
+  </div>
+
+  <div class="quiz-body fade-in" id="quiz-body">
+    <!-- dynamically filled -->
+  </div>
+</div>
+
+<!-- ===== LOADING ===== -->
+<div id="screen-loading" class="screen">
+  <div class="loading-cake">🍰</div>
+  <div class="loading-text">On analyse tes réponses…</div>
+  <div class="loading-sub">On prépare ta recommandation sur mesure !</div>
+  <div class="loading-dots">
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+  </div>
+</div>
+
+<!-- ===== RESULT ===== -->
+<div id="screen-result" class="screen">
+  <div class="result-hero">
+    <div class="result-badge" id="result-badge">Ton profil gourmand</div>
+    <span class="result-cake-emoji" id="result-emoji">🎂</span>
+    <p class="result-intro">Ta recommandation LaurenSansGluten</p>
+    <h2 class="result-title" id="result-title">—</h2>
+    <p class="result-subtitle" id="result-subtitle">—</p>
+  </div>
+
+  <div class="result-body">
+    <div class="result-section-title">Tes atouts nutritifs</div>
+    <div class="nutri-cards" id="nutri-cards"></div>
+
+    <div class="result-section-title">Ton profil</div>
+    <div class="profile-box">
+      <div class="profile-box-title" id="profile-title">—</div>
+      <div class="profile-box-text" id="profile-text">—</div>
+    </div>
+
+    <div class="result-section-title">La farine dans ton gâteau</div>
+    <div class="flour-story" id="flour-story"></div>
+
+    <button class="btn-retry" onclick="resetQuiz()">🔄 Recommencer le quiz</button>
+    <button class="btn-share" onclick="shareResult()">📲 Partager mon résultat</button>
+
+    <div class="brand-footer">
+      <strong>@laurensansgluten</strong> · Pâtisserie artisanale africaine sans gluten & sans lactose
+    </div>
+  </div>
+</div>
+
+<script>
+// =============================================
+// DATA
+// =============================================
+
+const questions = [
+  {
+    id: 1,
+    emoji: "👅",
+    text: "Quelle saveur te fait craquer ?",
+    note: "Ferme les yeux... tu es dans une boulangerie. Qu'est-ce qui t'attire ?",
+    factKey: null,
+    options: [
+      { emoji: "🍫", main: "Chocolat intense", sub: "Fondant, puissant, réconfortant", value: "chocolat" },
+      { emoji: "🌰", main: "Noisette & amande", sub: "Doux, sucré naturel, légèrement grillé", value: "noisette" },
+      { emoji: "🍠", main: "Sucré naturel, végétal", sub: "Goût de patate douce, douceur authentique", value: "vegetal" },
+      { emoji: "⚖️", main: "Un équilibre parfait", sub: "Ni trop sucré, ni trop fort — juste bien", value: "balance" }
+    ]
+  },
+  {
+    id: 2,
+    emoji: "🧁",
+    text: "Quelle texture préfères-tu ?",
+    note: "Imagine la première bouchée…",
+    factKey: null,
+    options: [
+      { emoji: "💧", main: "Ultra moelleux et fondant", sub: "Qui fond en bouche, humide à cœur", value: "fondant" },
+      { emoji: "☁️", main: "Aérien et léger", sub: "Doux, léger, qui ne pèse pas", value: "aérien" },
+      { emoji: "💪", main: "Dense et rassasiant", sub: "Consistant, qui tient au ventre", value: "dense" },
+      { emoji: "🥐", main: "Croustillant-moelleux", sub: "Une légère croûte et un cœur tendre", value: "croustillant" }
+    ]
+  },
+  {
+    id: 3,
+    emoji: "🏃",
+    text: "Quel est ton rapport au sport ?",
+    note: "On cuisine aussi pour nourrir tes performances !",
+    factKey: "sport",
+    factText: "🌟 Le saviez-vous ? La farine de patate douce est idéale pour les sportifs : ses glucides à IG bas libèrent l'énergie progressivement, parfait avant et après l'effort !",
+    options: [
+      { emoji: "🏋️", main: "Sportif(ve) régulier(ère)", sub: "Je fais du sport plusieurs fois par semaine", value: "sportif" },
+      { emoji: "🚶", main: "Actif(ve) au quotidien", sub: "Je bouge mais sans routine sportive stricte", value: "actif" },
+      { emoji: "🧘", main: "Bien-être & détente", sub: "Je préfère le yoga, la marche, la douceur", value: "bienetre" },
+      { emoji: "🌱", main: "Je commence ma démarche", sub: "J'essaie d'adopter un mode de vie plus sain", value: "debut" }
+    ]
+  },
+  {
+    id: 4,
+    emoji: "🌿",
+    text: "Quel est ton objectif nutritionnel prioritaire ?",
+    note: "Ce que tu cherches dans ton assiette au quotidien",
+    factKey: "nutri",
+    factText: "💡 Tous nos gâteaux sont sans gluten et sans lactose, mais chaque farine a ses super-pouvoirs spécifiques !",
+    options: [
+      { emoji: "⚡", main: "Énergie & performance", sub: "Glucides utiles, récupération musculaire", value: "energie" },
+      { emoji: "🩺", main: "Glycémie maîtrisée", sub: "Pas de pic de sucre, énergie stable", value: "glycemie" },
+      { emoji: "🌸", main: "Digestion & confort intestinal", sub: "Fibres, flore intestinale, légèreté", value: "digestion" },
+      { emoji: "🛡️", main: "Anti-inflammatoire & antioxydant", sub: "Protéger mes cellules, prévenir le vieillissement", value: "antioxydant" }
+    ]
+  },
+  {
+    id: 5,
+    emoji: "🌍",
+    text: "Quelle histoire te touche le plus ?",
+    note: "Nos farines ont toutes des origines africaines… laquelle te parle ?",
+    factKey: "histoire",
+    factText: "🌍 LaurenSansGluten célèbre les farines africaines méconnues en Europe. Chacune a une histoire millénaire à raconter !",
+    options: [
+      { emoji: "🏺", main: "Noix tigrée des Pharaons", sub: "Le souchet, consommé en Égypte depuis 2000 ans av. J.-C.", value: "souchet_hist" },
+      { emoji: "🌾", main: "La céréale de l'avenir", sub: "Le sorgho, cultivé depuis 10 000 ans, résistant à la sécheresse", value: "sorgho_hist" },
+      { emoji: "🍠", main: "Tubercule du bien-être sportif", sub: "La patate douce, alliée des athlètes depuis des siècles", value: "patate_hist" },
+      { emoji: "💚", main: "L'impact écologique", sub: "Je veux des farines qui respectent la planète", value: "eco" }
+    ]
+  },
+  {
+    id: 6,
+    emoji: "🎂",
+    text: "Pour quelle occasion tu craques sur un gâteau ?",
+    note: "Le bon gâteau au bon moment !",
+    factKey: null,
+    options: [
+      { emoji: "🏅", main: "Avant ou après le sport", sub: "Pour me donner de l'énergie ou récupérer", value: "sport_occ" },
+      { emoji: "☕", main: "Pause gourmande du quotidien", sub: "Un petit plaisir avec mon thé ou café", value: "quotidien" },
+      { emoji: "🎉", main: "Moment de partage", sub: "Pour régaler famille et amis", value: "partage" },
+      { emoji: "🌙", main: "Douceur réconfortante le soir", sub: "Mon petit plaisir avant de me coucher", value: "soir" }
+    ]
+  },
+  {
+    id: 7,
+    emoji: "🧡",
+    text: "Quelle phrase te correspond le mieux ?",
+    note: "Sois honnête, il n'y a pas de mauvaise réponse !",
+    factKey: null,
+    options: [
+      { emoji: "💪", main: "\"Je mange pour performer\"", sub: "Mon alimentation soutient mes objectifs physiques", value: "perform" },
+      { emoji: "😌", main: "\"Je veux me faire du bien sans culpabiliser\"", sub: "Plaisir et santé peuvent coexister", value: "plaisir_sante" },
+      { emoji: "🔬", main: "\"Je fais attention à ce que je mets dans mon assiette\"", sub: "Je lis les étiquettes, je cherche le meilleur", value: "conscient" },
+      { emoji: "🌺", main: "\"Je découvre de nouvelles saveurs\"", sub: "La curiosité culinaire me guide", value: "curieux" }
+    ]
+  }
+];
+
+// =============================================
+// RESULTS
+// =============================================
+
+const results = {
+  moelleux: {
+    emoji: "🍫",
+    badge: "Tu es un(e) Choco-Warrior !",
+    title: "Moelleux au Chocolat au Sorgho",
+    subtitle: "Un gâteau fondant, intense et profond — fait pour toi !",
+    profileTitle: "Le profil Fondant & Engagé",
+    profileText: "Tu aimes les saveurs intenses et tu cherches à allier plaisir et conscience nutritionnelle. Tu es sensible aux histoires derrière les aliments et tu veux que ton alimentation ait du sens — pour toi et pour la planète.",
+    nutri: [
+      { icon: "⚡", label: "Énergie", value: "IG modéré (65) — énergie progressive sans pic de glycémie" },
+      { icon: "🦴", label: "Minéraux", value: "Riche en fer, calcium & phosphore — des os solides !" },
+      { icon: "🛡️", label: "Antioxydants", value: "Polyphénols & flavonoïdes — protection cellulaire puissante" },
+      { icon: "💪", label: "Protéines", value: "Source de protéines végétales — idéal pour les sportifs" }
+    ],
+    flourEmoji: "🌾",
+    flourName: "Farine de Sorgho",
+    flourOrigin: "Afrique de l'Est · Céréale millénaire",
+    flourText: "Le sorgho est cultivé depuis plus de 10 000 ans en Afrique. Naturellement sans gluten, avec un IG modéré (65 contre 95 pour la farine de riz), il est riche en fer, calcium, phosphore et en puissants antioxydants. C'est la 5ème céréale mondiale — et probablement la plus sous-estimée en Europe !",
+    flourBadges: ["Sans gluten", "IG modéré", "Anti-inflammatoire", "Origine Afrique", "Céréale de l'avenir"]
+  },
+  muffins_souchet: {
+    emoji: "🌰",
+    badge: "Tu es un(e) Noisette Addict !",
+    title: "Muffins Souchet & Patate Douce",
+    subtitle: "Des muffins moelleux au goût naturellement noisette, pour les gourmand(e)s conscient(e)s",
+    profileTitle: "Le profil Gourmet & Bien-être",
+    profileText: "Tu aimes les saveurs douces et naturellement sucrées. Tu fais attention à ta digestion et à ton confort intestinal. Le goût noisette-amande du souchet va te faire tomber amoureux(se) — avec en prime, des fibres prébiotiques pour ton microbiote !",
+    nutri: [
+      { icon: "🌱", label: "IG ultra bas", value: "Indice glycémique de 35 — le plus bas de nos farines !" },
+      { icon: "🦠", label: "Fibres prébiotiques", value: "Améliore le transit & renforce la flore intestinale" },
+      { icon: "🫒", label: "Oméga-9", value: "Acide oléique comme l'huile d'olive — bon cholestérol ✓" },
+      { icon: "💪", label: "Protéines", value: "26g de protéines végétales pour 100g de farine !" }
+    ],
+    flourEmoji: "🌰",
+    flourName: "Farine de Souchet (Noix Tigrée)",
+    flourOrigin: "Afrique subsaharienne · Tubercule des Pharaons",
+    flourText: "La noix tigrée existe depuis l'Antiquité égyptienne (2000 ans av. J.-C.) ! Ce petit tubercule africain cache un profil nutritionnel exceptionnel : IG très bas (35), 26g de protéines/100g, fibres prébiotiques, oméga-9 et vitamines E & C. Son goût naturellement sucré-noisette réduit même le besoin de sucre dans les recettes !",
+    flourBadges: ["IG = 35", "Prébiotique", "Sans gluten", "Origine Afrique", "Superaliment antique"]
+  },
+  muffins_patate: {
+    emoji: "🍠",
+    badge: "Tu es un(e) Sport & Nature !",
+    title: "Muffins 100% Patate Douce",
+    subtitle: "L'énergie pure du sportif, en version gourmande et sans compromis",
+    profileTitle: "Le profil Athlete & Conscient(e)",
+    profileText: "Tu manges pour performer ET pour te faire plaisir. Ta priorité : une énergie stable, une bonne récupération et des aliments qui nourrissent vraiment ton corps. Les muffins 100% patate douce sont ta collation pré ou post-entraînement idéale — sans gluten, alcalinisants et bourrés de micronutriments.",
+    nutri: [
+      { icon: "🏃", label: "Sport & récupération", value: "Glucides à IG bas — carburant idéal pré/post effort" },
+      { icon: "🌈", label: "Bêta-carotène", value: "Antioxydant puissant — protection cellulaire & immunité" },
+      { icon: "⚖️", label: "Alcalinisant", value: "Rééquilibre le pH du corps après l'effort physique" },
+      { icon: "🩺", label: "Glycémie", value: "Régule le taux de sucre dans le sang — zéro culpabilité !" }
+    ],
+    flourEmoji: "🍠",
+    flourName: "Farine de Patate Douce",
+    flourOrigin: "Afrique · Tubercule des sportifs",
+    flourText: "La farine de patate douce est le secret des sportifs qui refusent de sacrifier le plaisir. Naturellement sans gluten, à IG bas, riche en bêta-carotène (antioxydant), vitamines B & C, fer, zinc et potassium. Elle est alcalinisante, ce qui aide à rééquilibrer le corps après l'effort. Et elle donne aux muffins une douceur naturelle irrésistible !",
+    flourBadges: ["Sans gluten", "IG bas", "Alcalinisant", "Idéal sportif", "Bêta-carotène"]
+  }
+};
+
+// =============================================
+// SCORING
+// =============================================
+
+function computeResult(answers) {
+  let scores = { moelleux: 0, muffins_souchet: 0, muffins_patate: 0 };
+
+  const map = {
+    // Q1 goût
+    "chocolat": { moelleux: 3 },
+    "noisette": { muffins_souchet: 3 },
+    "vegetal": { muffins_patate: 3 },
+    "balance": { moelleux: 1, muffins_souchet: 1, muffins_patate: 1 },
+    // Q2 texture
+    "fondant": { moelleux: 3 },
+    "aérien": { muffins_patate: 2, muffins_souchet: 1 },
+    "dense": { muffins_souchet: 3 },
+    "croustillant": { muffins_patate: 2, moelleux: 1 },
+    // Q3 sport
+    "sportif": { muffins_patate: 3 },
+    "actif": { muffins_patate: 2, muffins_souchet: 1 },
+    "bienetre": { muffins_souchet: 3 },
+    "debut": { moelleux: 2, muffins_souchet: 1 },
+    // Q4 objectif
+    "energie": { muffins_patate: 3 },
+    "glycemie": { muffins_souchet: 3, muffins_patate: 1 },
+    "digestion": { muffins_souchet: 3 },
+    "antioxydant": { moelleux: 2, muffins_patate: 2 },
+    // Q5 histoire
+    "souchet_hist": { muffins_souchet: 3 },
+    "sorgho_hist": { moelleux: 3 },
+    "patate_hist": { muffins_patate: 3 },
+    "eco": { moelleux: 2, muffins_patate: 1 },
+    // Q6 occasion
+    "sport_occ": { muffins_patate: 3 },
+    "quotidien": { muffins_souchet: 2, moelleux: 1 },
+    "partage": { moelleux: 3 },
+    "soir": { moelleux: 2, muffins_souchet: 1 },
+    // Q7 phrase
+    "perform": { muffins_patate: 3 },
+    "plaisir_sante": { muffins_souchet: 2, moelleux: 1 },
+    "conscient": { muffins_souchet: 2, muffins_patate: 1 },
+    "curieux": { moelleux: 2, muffins_souchet: 1 }
+  };
+
+  answers.forEach(a => {
+    if (map[a]) {
+      Object.keys(map[a]).forEach(k => { scores[k] += map[a][k]; });
+    }
+  });
+
+  return Object.keys(scores).reduce((a, b) => scores[a] >= scores[b] ? a : b);
+}
+
+// =============================================
+// STATE
+// =============================================
+
+let currentQ = 0;
+let answers = [];
+let selectedOption = null;
+
+// =============================================
+// NAVIGATION
+// =============================================
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+}
+
+function startQuiz() {
+  currentQ = 0;
+  answers = [];
+  showScreen('quiz');
+  renderQuestion();
+}
+
+function resetQuiz() {
+  startQuiz();
+  showScreen('intro');
+}
+
+function renderQuestion() {
+  const q = questions[currentQ];
+  selectedOption = null;
+
+  const pct = Math.round(((currentQ) / questions.length) * 100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('step-label').textContent = `Question ${currentQ + 1}/${questions.length}`;
+
+  const factHtml = q.factKey ? `
+    <div class="fact-box" id="fact-box">
+      <div class="fact-label">💡 Le saviez-vous ?</div>
+      <div class="fact-text">${q.factText}</div>
+    </div>
+  ` : '';
+
+  const optionsHtml = q.options.map((o, i) => `
+    <div class="option-card" id="opt-${i}" onclick="selectOption(${i}, '${o.value}')">
+      <div class="option-radio"></div>
+      <div class="option-emoji">${o.emoji}</div>
+      <div class="option-content">
+        <div class="option-main">${o.main}</div>
+        <div class="option-sub">${o.sub}</div>
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('quiz-body').innerHTML = `
+    <div class="fade-in">
+      <div class="question-number">Question ${currentQ + 1}</div>
+      <span class="question-emoji">${q.emoji}</span>
+      <div class="question-text">${q.text}</div>
+      <p class="fun-note">${q.note}</p>
+      ${factHtml}
+      <div class="options-grid">${optionsHtml}</div>
+      <button class="btn-next" id="btn-next" onclick="nextQuestion()">
+        ${currentQ < questions.length - 1 ? 'Question suivante →' : 'Voir mon résultat 🎉'}
+      </button>
+    </div>
+  `;
+}
+
+function selectOption(i, value) {
+  document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('opt-' + i).classList.add('selected');
+  selectedOption = value;
+  document.getElementById('btn-next').classList.add('enabled');
+
+  // Show fact box if available
+  const fb = document.getElementById('fact-box');
+  if (fb) fb.classList.add('visible');
+}
+
+function nextQuestion() {
+  if (!selectedOption) return;
+  answers.push(selectedOption);
+
+  if (currentQ < questions.length - 1) {
+    currentQ++;
+    renderQuestion();
+  } else {
+    // Show loading then result
+    showScreen('loading');
+    setTimeout(() => {
+      showResult();
+    }, 2000);
+  }
+}
+
+function showResult() {
+  const key = computeResult(answers);
+  const r = results[key];
+
+  document.getElementById('result-badge').textContent = r.badge;
+  document.getElementById('result-emoji').textContent = r.emoji;
+  document.getElementById('result-title').textContent = r.title;
+  document.getElementById('result-subtitle').textContent = r.subtitle;
+  document.getElementById('profile-title').textContent = r.profileTitle;
+  document.getElementById('profile-text').textContent = r.profileText;
+
+  document.getElementById('nutri-cards').innerHTML = r.nutri.map(n => `
+    <div class="nutri-card">
+      <span class="icon">${n.icon}</span>
+      <div class="label">${n.label}</div>
+      <div class="value">${n.value}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('flour-story').innerHTML = `
+    <div class="flour-story-header">
+      <span class="flour-story-emoji">${r.flourEmoji}</span>
+      <div>
+        <div class="flour-story-name">${r.flourName}</div>
+        <div class="flour-story-origin">${r.flourOrigin}</div>
+      </div>
+    </div>
+    <div class="flour-story-text">${r.flourText}</div>
+    <div class="flour-badges">
+      ${r.flourBadges.map(b => `<span class="flour-badge">${b}</span>`).join('')}
+    </div>
+  `;
+
+  showScreen('result');
+}
+
+function shareResult() {
+  const title = document.getElementById('result-title').textContent;
+  if (navigator.share) {
+    navigator.share({
+      title: 'LaurenSansGluten — Mon résultat',
+      text: `Je suis fait(e) pour le "${title}" ! 🎂 Découvre quel gâteau te correspond chez @laurensansgluten`,
+      url: window.location.href
+    });
+  } else {
+    const text = `Je suis fait(e) pour le "${title}" ! 🎂 Découvre quel gâteau te correspond chez @laurensansgluten`;
+    navigator.clipboard.writeText(text).then(() => {
+      alert('✅ Résultat copié ! Partage-le sur Instagram 📲');
+    });
+  }
+}
+</script>
+</body>
+</html>
