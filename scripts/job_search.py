@@ -1,197 +1,149 @@
 #!/usr/bin/env python3
 """
 Recherche quotidienne d'offres d'emploi – Chef de projet / PO CDI Paris
+Utilise l'API officielle France Travail (francetravail.io)
 Envoie un résumé par email chaque matin.
 """
 
 import smtplib
-import xml.etree.ElementTree as ET
 import urllib.request
 import urllib.parse
 import os
 import re
+import json
 from datetime import datetime, timezone, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-# ── Configuration ────────────────────────────────────────────
-GMAIL_USER  = "adenikgnigla@gmail.com"
-GMAIL_PASS  = os.environ["GMAIL_APP_PASSWORD"]
-RECIPIENT   = "adenikgnigla@gmail.com"
+# ── Configuration ─────────────────────────────────────────────
+GMAIL_USER = "adenikgnigla@gmail.com"
+GMAIL_PASS = os.environ["GMAIL_APP_PASSWORD"]
+RECIPIENT  = "adenikgnigla@gmail.com"
 
-KEYWORDS    = ["chef de projet", "product owner", "po ", "project manager", "chef projet"]
-EXCLUDE     = ["stage", "alternance", "apprentissage", "freelance", "indépendant"]
+FT_CLIENT_ID     = os.environ["FRANCE_TRAVAIL_CLIENT_ID"]
+FT_CLIENT_SECRET = os.environ["FRANCE_TRAVAIL_CLIENT_SECRET"]
 
-PARIS_TIME  = timezone(timedelta(hours=2))   # CEST – ajuste à +1 en hiver si besoin
-TODAY       = datetime.now(PARIS_TIME).strftime("%d/%m/%Y")
+PARIS_TIME = timezone(timedelta(hours=2))
+TODAY      = datetime.now(PARIS_TIME).strftime("%d/%m/%Y")
 
-# ── Sources RSS ─────────────────────────────────────────────
-SOURCES = [
-    {
-        "name": "Indeed",
-        "url": (
-            "https://fr.indeed.com/rss?"
-            + urllib.parse.urlencode({
-                "q": "chef de projet CDI grande entreprise",
-                "l": "Paris",
-                "sort": "date",
-                "fromage": "1",   # dernières 24h
-            })
-        ),
-    },
-    {
-        "name": "Indeed – Product Owner",
-        "url": (
-            "https://fr.indeed.com/rss?"
-            + urllib.parse.urlencode({
-                "q": "product owner CDI Paris",
-                "l": "Paris",
-                "sort": "date",
-                "fromage": "1",
-            })
-        ),
-    },
-    {
-        "name": "APEC",
-        "url": (
-            "https://www.apec.fr/cms/rss/annonces.rss?"
-            + urllib.parse.urlencode({
-                "motsCles": "chef de projet",
-                "lieux": "75-92-93-94",
-                "typeContrat": "CDI",
-            })
-        ),
-    },
-    {
-        "name": "APEC – Product Owner",
-        "url": (
-            "https://www.apec.fr/cms/rss/annonces.rss?"
-            + urllib.parse.urlencode({
-                "motsCles": "product owner",
-                "lieux": "75-92-93-94",
-                "typeContrat": "CDI",
-            })
-        ),
-    },
-]
+# ── Auth France Travail (OAuth2 client_credentials) ─────────────────────
+def get_access_token() -> str:
+    url  = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
+    body = urllib.parse.urlencode({
+        "grant_type":    "client_credentials",
+        "client_id":     FT_CLIENT_ID,
+        "client_secret": FT_CLIENT_SECRET,
+        "scope":         "api_offresdemploiv2 o2dsoffre",
+    }).encode()
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read())["access_token"]
 
-# ── Helpers ─────────────────────────────────────────────
-def fetch_rss(url: str) -> list[dict]:
-    """Télécharge et parse un flux RSS, retourne une liste d'offres."""
+# ── Recherche d'offres ────────────────────────────────────────────
+def search_offers(token: str, keywords: str) -> list[dict]:
+    """Appelle l'API France Travail et retourne une liste d'offres."""
+    params = urllib.parse.urlencode({
+        "motsCles":      keywords,
+        "typeContrat":   "CDI",
+        "departement":   "75",          # Paris (ajouter 92,93,94 si besoin)
+        "publieeDepuis": "1",           # dernières 24h
+        "sort":          "1",           # tri par date
+        "range":         "0-49",
+    })
+    url = f"https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search?{params}"
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("Accept", "application/json")
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 JobSearchBot/1.0"})
         with urllib.request.urlopen(req, timeout=15) as resp:
-            data = resp.read()
-        root = ET.fromstring(data)
-        items = []
-        for item in root.findall(".//item"):
-            title = (item.findtext("title") or "").strip()
-            link  = (item.findtext("link")  or "").strip()
-            desc  = (item.findtext("description") or "").strip()
-            # Nettoyage HTML basique dans la description
-            desc  = re.sub(r"<[^>]+>", " ", desc)
-            desc  = re.sub(r"\s+", " ", desc).strip()[:300]
-            items.append({"title": title, "link": link, "desc": desc})
-        return items
+            data = json.loads(resp.read())
+        return data.get("resultats", [])
     except Exception as exc:
-        print(f"  ⚠ Erreur RSS ({url[:60]}…) : {exc}")
+        print(f"  ⚠ Erreur API ({keywords}) : {exc}")
         return []
 
+# ── Collecte ──────────────────────────────────────────────────────
+print("Obtention du token France Travail…")
+token = get_access_token()
+print("Token OK")
 
-def is_relevant(offer: dict) -> bool:
-    """Filtre les offres selon les mots-clés et les exclusions."""
-    text = (offer["title"] + " " + offer["desc"]).lower()
-    has_keyword = any(kw in text for kw in KEYWORDS)
-    has_exclude = any(ex in text for ex in EXCLUDE)
-    return has_keyword and not has_exclude
+all_raw: list[dict] = []
+for kw in ["chef de projet", "product owner"]:
+    print(f"Recherche : {kw!r}…")
+    results = search_offers(token, kw)
+    print(f"  → {len(results)} offre(s)")
+    all_raw.extend(results)
+
+# Dédupliquer par ID
+unique: dict[str, dict] = {}
+for o in all_raw:
+    oid = o.get("id", o.get("intitule", ""))
+    if oid not in unique:
+        unique[oid] = o
+
+offers = list(unique.values())
+print(f"\nTotal unique : {len(offers)} offre(s)")
+
+# ── Formatage de l'email HTML ─────────────────────────────────────
+def fmt_offer(o: dict) -> str:
+    title      = o.get("intitule", "Offre sans titre")
+    company    = o.get("entreprise", {}).get("nom", "Entreprise non précisée")
+    lieu       = o.get("lieuTravail", {}).get("libelle", "Paris")
+    contrat    = o.get("typeContratLibelle", "CDI")
+    desc_raw   = o.get("description", "")
+    desc       = re.sub(r"\s+", " ", desc_raw).strip()[:280]
+    url        = f"https://candidat.francetravail.fr/offres/recherche/detail/{o.get('id', '')}"
+
+    return f"""
+    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px;
+                padding:16px 20px; margin-bottom:16px;">
+      <p style="margin:0 0 4px 0; font-size:11px; color:#888; text-transform:uppercase;
+                letter-spacing:.5px;">France Travail</p>
+      <h3 style="margin:0 0 6px 0; font-size:16px; color:#1a1a2e;">
+        <a href="{url}" style="color:#3b5bdb; text-decoration:none;">{title}</a>
+      </h3>
+      <p style="margin:0 0 6px 0; font-size:13px; color:#444;">
+        🏢 {company} &nbsp;·&nbsp; 📍 {lieu} &nbsp;·&nbsp; 📄 {contrat}
+      </p>
+      <p style="margin:0; font-size:13px; color:#555; line-height:1.5;">{desc}…</p>
+      <a href="{url}" style="display:inline-block; margin-top:10px; padding:7px 16px;
+         background:#3b5bdb; color:#fff; border-radius:5px; text-decoration:none;
+         font-size:13px;">Voir l'offre →</a>
+    </div>"""
 
 
-def deduplicate(offers: list[dict]) -> list[dict]:
-    seen_links = set()
-    result = []
-    for o in offers:
-        if o["link"] not in seen_links:
-            seen_links.add(o["link"])
-            result.append(o)
-    return result
-
-
-# ── Collecte des offres ───────────────────────────────────────────
-all_offers: list[tuple[str, dict]] = []   # (source_name, offer)
-
-for source in SOURCES:
-    print(f"Fetching {source['name']}…")
-    raw = fetch_rss(source["url"])
-    relevant = [o for o in raw if is_relevant(o)]
-    print(f"  → {len(raw)} offres brutes, {len(relevant)} pertinentes")
-    all_offers.extend((source["name"], o) for o in relevant)
-
-# Dédupliquer toutes les offres (même lien = même offre)
-unique: dict[str, tuple[str, dict]] = {}
-for src, offer in all_offers:
-    if offer["link"] not in unique:
-        unique[offer["link"]] = (src, offer)
-
-final_offers = list(unique.values())
-print(f"\nTotal : {len(final_offers)} offre(s) unique(s) trouvée(s)")
-
-
-# ── Construction de l'email HTML ──────────────────────────────────
-def build_html(offers: list[tuple[str, dict]]) -> str:
+def build_html(offers: list[dict]) -> str:
     if not offers:
-        body_content = """
-        <p style="font-size:16px; color:#555;">
-          Aucune nouvelle offre correspondant à ton profil aujourd'hui.<br>
-          Reviens demain – le marché bouge vite !
-        </p>"""
+        body = """<p style="font-size:16px; color:#555;">
+          Aucune nouvelle offre aujourd'hui. Reviens demain !</p>"""
     else:
-        cards = ""
-        for src, o in offers:
-            cards += f"""
-        <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px;
-                    padding:16px 20px; margin-bottom:16px;">
-          <p style="margin:0 0 4px 0; font-size:11px; color:#888; text-transform:uppercase;
-                    letter-spacing:.5px;">{src}</p>
-          <h3 style="margin:0 0 8px 0; font-size:17px; color:#1a1a2e;">
-            <a href="{o['link']}" style="color:#3b5bdb; text-decoration:none;">{o['title']}</a>
-          </h3>
-          <p style="margin:0; font-size:13px; color:#555; line-height:1.5;">{o['desc']}…</p>
-          <a href="{o['link']}" style="display:inline-block; margin-top:10px; padding:7px 16px;
-             background:#3b5bdb; color:#fff; border-radius:5px; text-decoration:none;
-             font-size:13px;">Voir l'offre →</a>
-        </div>"""
-        body_content = cards
+        body = "".join(fmt_offer(o) for o in offers)
 
     return f"""<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"></head>
-<body style="margin:0; padding:0; background:#f4f6fb; font-family: -apple-system, Arial, sans-serif;">
-  <div style="max-width:640px; margin:30px auto; background:#f4f6fb;">
+<body style="margin:0;padding:0;background:#f4f6fb;font-family:-apple-system,Arial,sans-serif;">
+  <div style="max-width:640px;margin:30px auto;background:#f4f6fb;">
 
-    <!-- Header -->
-    <div style="background:#1a1a2e; border-radius:10px 10px 0 0; padding:28px 32px;">
-      <h1 style="margin:0; color:#fff; font-size:22px;">🔍 Offres du jour</h1>
-      <p style="margin:6px 0 0 0; color:#a0aec0; font-size:14px;">
-        Chef de Projet / Product Owner · CDI · Paris/IDF · {TODAY}
+    <div style="background:#1a1a2e;border-radius:10px 10px 0 0;padding:28px 32px;">
+      <h1 style="margin:0;color:#fff;font-size:22px;">🔍 Offres du jour</h1>
+      <p style="margin:6px 0 0;color:#a0aec0;font-size:14px;">
+        Chef de Projet / Product Owner · CDI · Paris · {TODAY}
       </p>
     </div>
 
-    <!-- Summary -->
-    <div style="background:#3b5bdb; padding:12px 32px;">
-      <p style="margin:0; color:#fff; font-size:15px;">
+    <div style="background:#3b5bdb;padding:12px 32px;">
+      <p style="margin:0;color:#fff;font-size:15px;">
         <strong>{len(offers)} offre(s)</strong> correspondent à ton profil aujourd'hui
       </p>
     </div>
 
-    <!-- Body -->
-    <div style="padding:24px 32px;">
-      {body_content}
-    </div>
+    <div style="padding:24px 32px;">{body}</div>
 
-    <!-- Footer -->
-    <div style="padding:16px 32px; text-align:center; font-size:11px; color:#aaa;">
-      Sources : Indeed · APEC &nbsp;|&nbsp;
-      Profil : Chef de projet / PO · CDI · Paris · Grande entreprise · 2-5 ans exp.
+    <div style="padding:16px 32px;text-align:center;font-size:11px;color:#aaa;">
+      Source : France Travail (francetravail.fr) &nbsp;|&nbsp;
+      Profil : Chef de projet / PO · CDI · Paris · Grande entreprise · 2-5 ans
     </div>
 
   </div>
@@ -199,10 +151,9 @@ def build_html(offers: list[tuple[str, dict]]) -> str:
 </html>"""
 
 
-# ── Envoi de l'email ────────────────────────────────────────────
-html_body = build_html(final_offers)
-
-subject = f"🔍 Offres du jour – Chef de Projet / PO Paris CDI – {TODAY} ({len(final_offers)} offre(s))"
+# ── Envoi ───────────────────────────────────────────────────────────
+subject  = f"🔍 Offres du jour – Chef de Projet / PO CDI Paris – {TODAY} ({len(offers)} offre(s))"
+html_body = build_html(offers)
 
 msg = MIMEMultipart("alternative")
 msg["Subject"] = subject
