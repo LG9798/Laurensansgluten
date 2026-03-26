@@ -28,21 +28,22 @@ TODAY      = datetime.now(PARIS_TIME).strftime("%d/%m/%Y")
 
 # ── Auth France Travail (OAuth2 client_credentials) ───────────────────────────
 def get_access_token() -> str:
+    import base64
     url  = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
     body = urllib.parse.urlencode({
-        "grant_type":    "client_credentials",
-        "client_id":     FT_CLIENT_ID,
-        "client_secret": FT_CLIENT_SECRET,
-        "scope":         "api_offresdemploiv2",
+        "grant_type": "client_credentials",
+        "scope":      "api_offresdemploiv2 o2dsoffre",
     }).encode()
+    credentials = base64.b64encode(f"{FT_CLIENT_ID}:{FT_CLIENT_SECRET}".encode()).decode()
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    req.add_header("Authorization", f"Basic {credentials}")
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read())["access_token"]
     except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        print(f"Erreur auth France Travail ({e.code}): {body}")
+        error_body = e.read().decode()
+        print(f"Erreur auth France Travail ({e.code}): {error_body}")
         raise
 
 # ── Recherche d'offres ────────────────────────────────────────────────────────
