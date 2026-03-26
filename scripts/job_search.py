@@ -69,6 +69,9 @@ def ddg_search(query: str) -> list[dict]:
         print(f"  ⚠ Erreur DDG : {e}")
         return []
 
+    print(f"  HTML reçu : {len(html)} chars")
+    print(f"  Début réponse : {html[:300]!r}")
+
     results = []
     for m in re.finditer(
         r'<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
