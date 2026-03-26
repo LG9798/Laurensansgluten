@@ -2,9 +2,7 @@ name: Recherche quotidienne d'offres d'emploi
 
 on:
   schedule:
-    # Tous les jours de la semaine à 6h UTC (7h Paris heure d'hiver, 8h en été)
-    - cron: "0 6 * * 1-5"
-  # Permet de lancer manuellement depuis l'onglet Actions de GitHub
+    - cron: "0 6 * * 1-5"   # lun-ven à 7h Paris (heure d'hiver)
   workflow_dispatch:
 
 jobs:
@@ -24,6 +22,4 @@ jobs:
       - name: Lancer la recherche et envoyer l'email
         env:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          FRANCE_TRAVAIL_CLIENT_ID: ${{ secrets.FRANCE_TRAVAIL_CLIENT_ID }}
-          FRANCE_TRAVAIL_CLIENT_SECRET: ${{ secrets.FRANCE_TRAVAIL_CLIENT_SECRET }}
         run: python scripts/job_search.py
