@@ -1,164 +1,154 @@
 #!/usr/bin/env python3
 """
 Recherche quotidienne d'offres d'emploi – Chef de projet / PO CDI Paris
-Utilise l'API officielle France Travail (francetravail.io)
-Envoie un résumé par email chaque matin.
+Scrape les pages publiques de France Travail (JSON-LD embarqué dans le HTML).
+Aucune clé API requise.
 """
 
 import smtplib
-import urllib.request
-import urllib.parse
 import os
 import re
 import json
 from datetime import datetime, timezone, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+from urllib.error import URLError
+from html.parser import HTMLParser
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 GMAIL_USER = "adenikgnigla@gmail.com"
 GMAIL_PASS = os.environ["GMAIL_APP_PASSWORD"]
 RECIPIENT  = "adenikgnigla@gmail.com"
 
-FT_CLIENT_ID     = os.environ["FRANCE_TRAVAIL_CLIENT_ID"]
-FT_CLIENT_SECRET = os.environ["FRANCE_TRAVAIL_CLIENT_SECRET"]
-
 PARIS_TIME = timezone(timedelta(hours=2))
 TODAY      = datetime.now(PARIS_TIME).strftime("%d/%m/%Y")
 
-# ── Auth France Travail (OAuth2 client_credentials) ───────────────────────────
-def get_access_token() -> str:
-    import base64
-    url  = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
-    body = urllib.parse.urlencode({
-        "grant_type": "client_credentials",
-        "scope":      "api_offresdemploiv2 o2dsoffre",
-    }).encode()
-    credentials = base64.b64encode(f"{FT_CLIENT_ID}:{FT_CLIENT_SECRET}".encode()).decode()
-    req = urllib.request.Request(url, data=body, method="POST")
-    req.add_header("Content-Type", "application/x-www-form-urlencoded")
-    req.add_header("Authorization", f"Basic {credentials}")
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())["access_token"]
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode()
-        print(f"Erreur auth France Travail ({e.code}): {error_body}")
-        raise
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "fr-FR,fr;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+}
 
-# ── Recherche d'offres ────────────────────────────────────────────────────────
-def search_offers(token: str, keywords: str) -> list[dict]:
-    """Appelle l'API France Travail et retourne une liste d'offres."""
-    params = urllib.parse.urlencode({
-        "motsCles":      keywords,
-        "typeContrat":   "CDI",
-        "departement":   "75",          # Paris (ajouter 92,93,94 si besoin)
-        "publieeDepuis": "1",           # dernières 24h
-        "sort":          "1",           # tri par date
-        "range":         "0-49",
+# ── Recherche France Travail (scraping JSON-LD) ───────────────────────────────
+def fetch_ft_offers(keywords: str) -> list[dict]:
+    params = urlencode({
+        "motsCles":        keywords,
+        "lieux":           "75L",   # Paris
+        "typeContrat":     "CDI",
+        "sort":            "1",     # tri par date
+        "offresPartenaires": "true",
     })
-    url = f"https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search?{params}"
-    req = urllib.request.Request(url)
-    req.add_header("Authorization", f"Bearer {token}")
-    req.add_header("Accept", "application/json")
+    url = f"https://candidat.francetravail.fr/offres/recherche?{params}"
+    print(f"  GET {url[:80]}…")
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
-        return data.get("resultats", [])
-    except Exception as exc:
-        print(f"  ⚠ Erreur API ({keywords}) : {exc}")
+        req = Request(url, headers=HEADERS)
+        with urlopen(req, timeout=20) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+    except URLError as e:
+        print(f"  ⚠ Erreur réseau : {e}")
         return []
 
+    # Cherche les blocs JSON-LD de type JobPosting
+    offers = []
+    for match in re.finditer(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html, re.DOTALL | re.IGNORECASE
+    ):
+        try:
+            data = json.loads(match.group(1))
+            # Peut être un objet ou une liste
+            items = data if isinstance(data, list) else [data]
+            for item in items:
+                if item.get("@type") == "JobPosting":
+                    offers.append(item)
+        except (json.JSONDecodeError, AttributeError):
+            continue
+
+    print(f"  → {len(offers)} offre(s) JSON-LD trouvée(s)")
+    return offers
+
+
 # ── Collecte ──────────────────────────────────────────────────────────────────
-print("Obtention du token France Travail…")
-token = get_access_token()
-print("Token OK")
-
 all_raw: list[dict] = []
-for kw in ["chef de projet", "product owner"]:
+for kw in ["chef de projet CDI", "product owner CDI"]:
     print(f"Recherche : {kw!r}…")
-    results = search_offers(token, kw)
-    print(f"  → {len(results)} offre(s)")
-    all_raw.extend(results)
+    all_raw.extend(fetch_ft_offers(kw))
 
-# Dédupliquer par ID
+# Dédupliquer par URL
 unique: dict[str, dict] = {}
 for o in all_raw:
-    oid = o.get("id", o.get("intitule", ""))
-    if oid not in unique:
-        unique[oid] = o
+    key = o.get("url") or o.get("identifier", {}).get("value", "") or o.get("title", "")
+    if key and key not in unique:
+        unique[key] = o
 
 offers = list(unique.values())
 print(f"\nTotal unique : {len(offers)} offre(s)")
 
-# ── Formatage de l'email HTML ─────────────────────────────────────────────────
+# ── Formatage HTML ────────────────────────────────────────────────────────────
 def fmt_offer(o: dict) -> str:
-    title      = o.get("intitule", "Offre sans titre")
-    company    = o.get("entreprise", {}).get("nom", "Entreprise non précisée")
-    lieu       = o.get("lieuTravail", {}).get("libelle", "Paris")
-    contrat    = o.get("typeContratLibelle", "CDI")
-    desc_raw   = o.get("description", "")
-    desc       = re.sub(r"\s+", " ", desc_raw).strip()[:280]
-    url        = f"https://candidat.francetravail.fr/offres/recherche/detail/{o.get('id', '')}"
+    title   = o.get("title", "Offre sans titre")
+    company = o.get("hiringOrganization", {}).get("name", "Entreprise non précisée")
+    lieu    = o.get("jobLocation", {}).get("address", {}).get("addressLocality", "Paris")
+    contrat = o.get("employmentType", "CDI")
+    desc    = re.sub(r"<[^>]+>", " ", o.get("description", ""))
+    desc    = re.sub(r"\s+", " ", desc).strip()[:280]
+    url     = o.get("url", "https://candidat.francetravail.fr/offres/recherche")
 
     return f"""
-    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px;
-                padding:16px 20px; margin-bottom:16px;">
-      <p style="margin:0 0 4px 0; font-size:11px; color:#888; text-transform:uppercase;
+    <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;
+                padding:16px 20px;margin-bottom:16px;">
+      <p style="margin:0 0 4px;font-size:11px;color:#888;text-transform:uppercase;
                 letter-spacing:.5px;">France Travail</p>
-      <h3 style="margin:0 0 6px 0; font-size:16px; color:#1a1a2e;">
-        <a href="{url}" style="color:#3b5bdb; text-decoration:none;">{title}</a>
+      <h3 style="margin:0 0 6px;font-size:16px;color:#1a1a2e;">
+        <a href="{url}" style="color:#3b5bdb;text-decoration:none;">{title}</a>
       </h3>
-      <p style="margin:0 0 6px 0; font-size:13px; color:#444;">
+      <p style="margin:0 0 6px;font-size:13px;color:#444;">
         🏢 {company} &nbsp;·&nbsp; 📍 {lieu} &nbsp;·&nbsp; 📄 {contrat}
       </p>
-      <p style="margin:0; font-size:13px; color:#555; line-height:1.5;">{desc}…</p>
-      <a href="{url}" style="display:inline-block; margin-top:10px; padding:7px 16px;
-         background:#3b5bdb; color:#fff; border-radius:5px; text-decoration:none;
+      <p style="margin:0;font-size:13px;color:#555;line-height:1.5;">{desc}…</p>
+      <a href="{url}" style="display:inline-block;margin-top:10px;padding:7px 16px;
+         background:#3b5bdb;color:#fff;border-radius:5px;text-decoration:none;
          font-size:13px;">Voir l'offre →</a>
     </div>"""
 
 
 def build_html(offers: list[dict]) -> str:
-    if not offers:
-        body = """<p style="font-size:16px; color:#555;">
-          Aucune nouvelle offre aujourd'hui. Reviens demain !</p>"""
-    else:
-        body = "".join(fmt_offer(o) for o in offers)
-
+    body = "".join(fmt_offer(o) for o in offers) if offers else (
+        '<p style="font-size:16px;color:#555;">Aucune nouvelle offre aujourd\'hui.</p>'
+    )
     return f"""<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f4f6fb;font-family:-apple-system,Arial,sans-serif;">
-  <div style="max-width:640px;margin:30px auto;background:#f4f6fb;">
-
+  <div style="max-width:640px;margin:30px auto;">
     <div style="background:#1a1a2e;border-radius:10px 10px 0 0;padding:28px 32px;">
       <h1 style="margin:0;color:#fff;font-size:22px;">🔍 Offres du jour</h1>
       <p style="margin:6px 0 0;color:#a0aec0;font-size:14px;">
         Chef de Projet / Product Owner · CDI · Paris · {TODAY}
       </p>
     </div>
-
     <div style="background:#3b5bdb;padding:12px 32px;">
       <p style="margin:0;color:#fff;font-size:15px;">
         <strong>{len(offers)} offre(s)</strong> correspondent à ton profil aujourd'hui
       </p>
     </div>
-
     <div style="padding:24px 32px;">{body}</div>
-
     <div style="padding:16px 32px;text-align:center;font-size:11px;color:#aaa;">
-      Source : France Travail (francetravail.fr) &nbsp;|&nbsp;
-      Profil : Chef de projet / PO · CDI · Paris · Grande entreprise · 2-5 ans
+      Source : France Travail · Profil : Chef de projet / PO · CDI · Paris · 2-5 ans
     </div>
-
   </div>
 </body>
 </html>"""
 
 
-# ── Envoi ─────────────────────────────────────────────────────────────────────
-subject  = f"🔍 Offres du jour – Chef de Projet / PO CDI Paris – {TODAY} ({len(offers)} offre(s))"
+# ── Envoi email ───────────────────────────────────────────────────────────────
+subject   = f"🔍 Offres du jour – Chef de Projet / PO CDI Paris – {TODAY} ({len(offers)} offre(s))"
 html_body = build_html(offers)
 
 msg = MIMEMultipart("alternative")
@@ -167,9 +157,9 @@ msg["From"]    = GMAIL_USER
 msg["To"]      = RECIPIENT
 msg.attach(MIMEText(html_body, "html"))
 
-print(f"\nEnvoi de l'email à {RECIPIENT}…")
+print(f"\nEnvoi email à {RECIPIENT}…")
 with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
     server.login(GMAIL_USER, GMAIL_PASS)
     server.sendmail(GMAIL_USER, RECIPIENT, msg.as_string())
 
-print("✅ Email envoyé avec succès !")
+print("✅ Email envoyé !")
