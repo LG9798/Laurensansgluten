@@ -34,7 +34,7 @@ def get_access_token() -> str:
         "grant_type":    "client_credentials",
         "client_id":     FT_CLIENT_ID,
         "client_secret": FT_CLIENT_SECRET,
-        "scope":         "api_offresdemploiv2 o2dsoffre",
+        "scope":         "api_offresdemploiv2",
     }).encode()
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
@@ -42,8 +42,8 @@ def get_access_token() -> str:
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read())["access_token"]
     except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        print(f"Erreur auth France Travail ({e.code}): {body}")
+        error_body = e.read().decode()
+        print(f"Erreur auth France Travail ({e.code}): {error_body}")
         raise
 
 # ── Recherche d'offres ────────────────────────────────────────────
@@ -52,9 +52,9 @@ def search_offers(token: str, keywords: str) -> list[dict]:
     params = urllib.parse.urlencode({
         "motsCles":      keywords,
         "typeContrat":   "CDI",
-        "departement":   "75",          # Paris (ajouter 92,93,94 si besoin)
-        "publieeDepuis": "1",           # dernières 24h
-        "sort":          "1",           # tri par date
+        "departement":   "75",
+        "publieeDepuis": "1",
+        "sort":          "1",
         "range":         "0-49",
     })
     url = f"https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search?{params}"
@@ -66,8 +66,8 @@ def search_offers(token: str, keywords: str) -> list[dict]:
             data = json.loads(resp.read())
         return data.get("resultats", [])
     except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        print(f"  ⚠ Erreur API ({keywords}) [{e.code}]: {body}")
+        error_body = e.read().decode()
+        print(f"  ⚠ Erreur API ({keywords}) [{e.code}]: {error_body}")
         return []
     except Exception as exc:
         print(f"  ⚠ Erreur API ({keywords}) : {exc}")
