@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 Recherche quotidienne d'offres d'emploi – Chef de projet / PO CDI Paris
-Scrape les pages publiques de France Travail (JSON-LD embarqué dans le HTML).
-Aucune clé API requise.
+Utilise DuckDuckGo (recherche web sans API ni compte).
 """
 
 import smtplib
@@ -15,7 +14,6 @@ from email.mime.text import MIMEText
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import URLError
-from html.parser import HTMLParser
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 GMAIL_USER = "adenikgnigla@gmail.com"
@@ -32,87 +30,100 @@ HEADERS = {
         "Chrome/122.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "fr-FR,fr;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+    "Referer": "https://duckduckgo.com/",
 }
 
-# ── Recherche France Travail (scraping JSON-LD) ───────────────────────────────
-def fetch_ft_offers(keywords: str) -> list[dict]:
-    params = urlencode({
-        "motsCles":        keywords,
-        "lieux":           "75L",   # Paris
-        "typeContrat":     "CDI",
-        "sort":            "1",     # tri par date
-        "offresPartenaires": "true",
-    })
-    url = f"https://candidat.francetravail.fr/offres/recherche?{params}"
-    print(f"  GET {url[:80]}…")
+QUERIES = [
+    '"chef de projet" CDI Paris recrutement -stage -alternance',
+    '"product owner" CDI Paris recrutement -stage -alternance',
+    '"chef de projet" CDI "île-de-france" grande entreprise',
+]
+
+JOB_SITES = {
+    "welcometothejungle.com": "Welcome to the Jungle",
+    "indeed.fr":              "Indeed",
+    "linkedin.com/jobs":      "LinkedIn",
+    "apec.fr":                "APEC",
+    "hellowork.com":          "HelloWork",
+    "francetravail.fr":       "France Travail",
+    "monster.fr":             "Monster",
+    "cadremploi.fr":          "Cadremploi",
+    "jobteaser.com":          "JobTeaser",
+}
+
+# ── Recherche DuckDuckGo ──────────────────────────────────────────────────────
+def ddg_search(query: str) -> list[dict]:
+    """Recherche sur DuckDuckGo HTML et retourne les résultats."""
+    data = urlencode({"q": query, "kl": "fr-fr", "df": "d"}).encode()
+    req = Request(
+        "https://html.duckduckgo.com/html/",
+        data=data,
+        headers=HEADERS,
+        method="POST",
+    )
     try:
-        req = Request(url, headers=HEADERS)
         with urlopen(req, timeout=20) as resp:
             html = resp.read().decode("utf-8", errors="replace")
     except URLError as e:
-        print(f"  ⚠ Erreur réseau : {e}")
+        print(f"  ⚠ Erreur DDG : {e}")
         return []
 
-    # Cherche les blocs JSON-LD de type JobPosting
-    offers = []
-    for match in re.finditer(
-        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+    results = []
+    # Extrait les résultats : titre + URL
+    for m in re.finditer(
+        r'<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
         html, re.DOTALL | re.IGNORECASE
     ):
-        try:
-            data = json.loads(match.group(1))
-            # Peut être un objet ou une liste
-            items = data if isinstance(data, list) else [data]
-            for item in items:
-                if item.get("@type") == "JobPosting":
-                    offers.append(item)
-        except (json.JSONDecodeError, AttributeError):
-            continue
+        url   = m.group(1).strip()
+        title = re.sub(r"<[^>]+>", "", m.group(2)).strip()
+        title = re.sub(r"\s+", " ", title)
+        if url.startswith("http") and title:
+            results.append({"title": title, "url": url})
 
-    print(f"  → {len(offers)} offre(s) JSON-LD trouvée(s)")
-    return offers
+    print(f"  → {len(results)} résultats bruts")
+    return results
+
+
+def is_job_site(url: str) -> str | None:
+    """Retourne le nom du site si c'est un site d'emploi connu."""
+    for domain, name in JOB_SITES.items():
+        if domain in url:
+            return name
+    return None
 
 
 # ── Collecte ──────────────────────────────────────────────────────────────────
-all_raw: list[dict] = []
-for kw in ["chef de projet CDI", "product owner CDI"]:
-    print(f"Recherche : {kw!r}…")
-    all_raw.extend(fetch_ft_offers(kw))
+raw_results: list[dict] = []
+
+for query in QUERIES:
+    print(f"\nRecherche DDG : {query!r}")
+    for r in ddg_search(query):
+        source = is_job_site(r["url"])
+        if source:
+            r["source"] = source
+            raw_results.append(r)
 
 # Dédupliquer par URL
 unique: dict[str, dict] = {}
-for o in all_raw:
-    key = o.get("url") or o.get("identifier", {}).get("value", "") or o.get("title", "")
-    if key and key not in unique:
-        unique[key] = o
+for r in raw_results:
+    if r["url"] not in unique:
+        unique[r["url"]] = r
 
 offers = list(unique.values())
-print(f"\nTotal unique : {len(offers)} offre(s)")
+print(f"\nTotal offres sur sites emploi : {len(offers)}")
 
-# ── Formatage HTML ────────────────────────────────────────────────────────────
+# ── Email HTML ────────────────────────────────────────────────────────────────
 def fmt_offer(o: dict) -> str:
-    title   = o.get("title", "Offre sans titre")
-    company = o.get("hiringOrganization", {}).get("name", "Entreprise non précisée")
-    lieu    = o.get("jobLocation", {}).get("address", {}).get("addressLocality", "Paris")
-    contrat = o.get("employmentType", "CDI")
-    desc    = re.sub(r"<[^>]+>", " ", o.get("description", ""))
-    desc    = re.sub(r"\s+", " ", desc).strip()[:280]
-    url     = o.get("url", "https://candidat.francetravail.fr/offres/recherche")
-
     return f"""
     <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;
-                padding:16px 20px;margin-bottom:16px;">
+                padding:16px 20px;margin-bottom:14px;">
       <p style="margin:0 0 4px;font-size:11px;color:#888;text-transform:uppercase;
-                letter-spacing:.5px;">France Travail</p>
-      <h3 style="margin:0 0 6px;font-size:16px;color:#1a1a2e;">
-        <a href="{url}" style="color:#3b5bdb;text-decoration:none;">{title}</a>
+                letter-spacing:.5px;">{o.get('source','Web')}</p>
+      <h3 style="margin:0 0 8px;font-size:16px;">
+        <a href="{o['url']}" style="color:#3b5bdb;text-decoration:none;">{o['title']}</a>
       </h3>
-      <p style="margin:0 0 6px;font-size:13px;color:#444;">
-        🏢 {company} &nbsp;·&nbsp; 📍 {lieu} &nbsp;·&nbsp; 📄 {contrat}
-      </p>
-      <p style="margin:0;font-size:13px;color:#555;line-height:1.5;">{desc}…</p>
-      <a href="{url}" style="display:inline-block;margin-top:10px;padding:7px 16px;
+      <a href="{o['url']}" style="display:inline-block;padding:6px 14px;
          background:#3b5bdb;color:#fff;border-radius:5px;text-decoration:none;
          font-size:13px;">Voir l'offre →</a>
     </div>"""
@@ -120,35 +131,31 @@ def fmt_offer(o: dict) -> str:
 
 def build_html(offers: list[dict]) -> str:
     body = "".join(fmt_offer(o) for o in offers) if offers else (
-        '<p style="font-size:16px;color:#555;">Aucune nouvelle offre aujourd\'hui.</p>'
+        '<p style="font-size:16px;color:#555;">Aucune offre trouvée aujourd\'hui.</p>'
     )
     return f"""<!DOCTYPE html>
-<html lang="fr">
-<head><meta charset="UTF-8"></head>
+<html lang="fr"><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f4f6fb;font-family:-apple-system,Arial,sans-serif;">
   <div style="max-width:640px;margin:30px auto;">
     <div style="background:#1a1a2e;border-radius:10px 10px 0 0;padding:28px 32px;">
       <h1 style="margin:0;color:#fff;font-size:22px;">🔍 Offres du jour</h1>
       <p style="margin:6px 0 0;color:#a0aec0;font-size:14px;">
-        Chef de Projet / Product Owner · CDI · Paris · {TODAY}
-      </p>
+        Chef de Projet / PO · CDI · Paris · {TODAY}</p>
     </div>
     <div style="background:#3b5bdb;padding:12px 32px;">
       <p style="margin:0;color:#fff;font-size:15px;">
-        <strong>{len(offers)} offre(s)</strong> correspondent à ton profil aujourd'hui
-      </p>
+        <strong>{len(offers)} offre(s)</strong> trouvées sur le web aujourd'hui</p>
     </div>
     <div style="padding:24px 32px;">{body}</div>
     <div style="padding:16px 32px;text-align:center;font-size:11px;color:#aaa;">
-      Source : France Travail · Profil : Chef de projet / PO · CDI · Paris · 2-5 ans
+      Sources : LinkedIn · WTTJ · Indeed · APEC · Cadremploi · France Travail
     </div>
   </div>
-</body>
-</html>"""
+</body></html>"""
 
 
-# ── Envoi email ───────────────────────────────────────────────────────────────
-subject   = f"🔍 Offres du jour – Chef de Projet / PO CDI Paris – {TODAY} ({len(offers)} offre(s))"
+# ── Envoi ─────────────────────────────────────────────────────────────────────
+subject   = f"🔍 Offres du jour – Chef de Projet/PO CDI Paris – {TODAY} ({len(offers)} offre(s))"
 html_body = build_html(offers)
 
 msg = MIMEMultipart("alternative")
@@ -157,9 +164,8 @@ msg["From"]    = GMAIL_USER
 msg["To"]      = RECIPIENT
 msg.attach(MIMEText(html_body, "html"))
 
-print(f"\nEnvoi email à {RECIPIENT}…")
+print(f"\nEnvoi à {RECIPIENT}…")
 with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
     server.login(GMAIL_USER, GMAIL_PASS)
     server.sendmail(GMAIL_USER, RECIPIENT, msg.as_string())
-
 print("✅ Email envoyé !")
