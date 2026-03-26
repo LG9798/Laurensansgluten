@@ -37,8 +37,13 @@ def get_access_token() -> str:
     }).encode()
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read())["access_token"]
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())["access_token"]
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"Erreur auth France Travail ({e.code}): {body}")
+        raise
 
 # ── Recherche d'offres ────────────────────────────────────────────────────────
 def search_offers(token: str, keywords: str) -> list[dict]:
