@@ -33,7 +33,7 @@ def get_access_token() -> str:
         "grant_type":    "client_credentials",
         "client_id":     FT_CLIENT_ID,
         "client_secret": FT_CLIENT_SECRET,
-        "scope":         "api_offresdemploiv2 o2dsoffre",
+        "scope":         "api_offresdemploiv2",
     }).encode()
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
