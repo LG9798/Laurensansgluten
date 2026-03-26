@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Recherche quotidienne d'offres d'emploi – Chef de projet / PO CDI Paris
-Utilise DuckDuckGo (recherche web sans API ni compte).
+Utilise DuckDuckGo Lite (recherche web sans API ni compte).
 """
 
 import smtplib
@@ -31,7 +31,6 @@ HEADERS = {
     ),
     "Accept-Language": "fr-FR,fr;q=0.9",
     "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-    "Referer": "https://duckduckgo.com/",
 }
 
 QUERIES = [
@@ -52,16 +51,12 @@ JOB_SITES = {
     "jobteaser.com":          "JobTeaser",
 }
 
-# ── Recherche DuckDuckGo ────────────────────────────────────────────
+# ── Recherche DuckDuckGo Lite ──────────────────────────────────────────
 def ddg_search(query: str) -> list[dict]:
-    """Recherche sur DuckDuckGo HTML et retourne les résultats."""
-    data = urlencode({"q": query, "kl": "fr-fr", "df": "d"}).encode()
-    req = Request(
-        "https://html.duckduckgo.com/html/",
-        data=data,
-        headers=HEADERS,
-        method="POST",
-    )
+    """Recherche sur DuckDuckGo Lite et retourne les résultats."""
+    params = urlencode({"q": query, "kl": "fr-fr"})
+    url = f"https://lite.duckduckgo.com/lite/?{params}"
+    req = Request(url, headers=HEADERS)
     try:
         with urlopen(req, timeout=20) as resp:
             html = resp.read().decode("utf-8", errors="replace")
@@ -70,18 +65,17 @@ def ddg_search(query: str) -> list[dict]:
         return []
 
     print(f"  HTML reçu : {len(html)} chars")
-    print(f"  Début réponse : {html[:300]!r}")
 
     results = []
     for m in re.finditer(
-        r'<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+        r'<a[^>]+class="result-link"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
         html, re.DOTALL | re.IGNORECASE
     ):
-        url   = m.group(1).strip()
+        link  = m.group(1).strip()
         title = re.sub(r"<[^>]+>", "", m.group(2)).strip()
         title = re.sub(r"\s+", " ", title)
-        if url.startswith("http") and title:
-            results.append({"title": title, "url": url})
+        if link.startswith("http") and title:
+            results.append({"title": title, "url": link})
 
     print(f"  → {len(results)} résultats bruts")
     return results
