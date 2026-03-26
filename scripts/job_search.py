@@ -8,6 +8,7 @@ Envoie un résumé par email chaque matin.
 import smtplib
 import urllib.request
 import urllib.parse
+import urllib.error
 import os
 import re
 import json
@@ -37,8 +38,13 @@ def get_access_token() -> str:
     }).encode()
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read())["access_token"]
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())["access_token"]
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"Erreur auth France Travail ({e.code}): {body}")
+        raise
 
 # ── Recherche d'offres ────────────────────────────────────────────
 def search_offers(token: str, keywords: str) -> list[dict]:
@@ -59,12 +65,17 @@ def search_offers(token: str, keywords: str) -> list[dict]:
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
         return data.get("resultats", [])
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"  ⚠ Erreur API ({keywords}) [{e.code}]: {body}")
+        return []
     except Exception as exc:
         print(f"  ⚠ Erreur API ({keywords}) : {exc}")
         return []
 
 # ── Collecte ──────────────────────────────────────────────────────
 print("Obtention du token France Travail…")
+print(f"CLIENT_ID utilisé : {FT_CLIENT_ID[:6]}...")
 token = get_access_token()
 print("Token OK")
 
