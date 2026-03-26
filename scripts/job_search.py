@@ -54,14 +54,10 @@ JOB_SITES = {
 
 # ── Recherche DuckDuckGo ──────────────────────────────────────────────────────
 def ddg_search(query: str) -> list[dict]:
-    """Recherche sur DuckDuckGo HTML et retourne les résultats."""
-    data = urlencode({"q": query, "kl": "fr-fr", "df": "d"}).encode()
-    req = Request(
-        "https://html.duckduckgo.com/html/",
-        data=data,
-        headers=HEADERS,
-        method="POST",
-    )
+    """Recherche sur DuckDuckGo Lite et retourne les résultats."""
+    params = urlencode({"q": query, "kl": "fr-fr"})
+    url = f"https://lite.duckduckgo.com/lite/?{params}"
+    req = Request(url, headers=HEADERS)
     try:
         with urlopen(req, timeout=20) as resp:
             html = resp.read().decode("utf-8", errors="replace")
@@ -70,18 +66,18 @@ def ddg_search(query: str) -> list[dict]:
         return []
 
     print(f"  HTML reçu : {len(html)} chars")
-    print(f"  Début réponse : {html[:300]!r}")
 
     results = []
+    # DDG Lite : les liens sont dans des <a class="result-link">
     for m in re.finditer(
-        r'<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+        r'<a[^>]+class="result-link"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
         html, re.DOTALL | re.IGNORECASE
     ):
-        url   = m.group(1).strip()
+        link  = m.group(1).strip()
         title = re.sub(r"<[^>]+>", "", m.group(2)).strip()
         title = re.sub(r"\s+", " ", title)
-        if url.startswith("http") and title:
-            results.append({"title": title, "url": url})
+        if link.startswith("http") and title:
+            results.append({"title": title, "url": link})
 
     print(f"  → {len(results)} résultats bruts")
     return results
